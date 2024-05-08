@@ -8,6 +8,7 @@ import jm.task.core.jdbc.util.Util;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.Transaction;
+
 import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -16,6 +17,11 @@ public class UserDaoHibernateImpl implements UserDao {
     private static final SessionFactory sessionFactory = Util.Hibernate.getSessionFactory();
     private static final Logger logger = Logger.getLogger(UserDaoHibernateImpl.class.getName());
 
+    // rollback() вызывается только в случае, если произошла ошибка при выполнении DML операций (изменяющих данные)
+    // — добавлении пользователя, удалении пользователя и очистке таблицы.
+    // saveUser(String name, String lastName, byte age) - добавление нового пользователя.
+    // removeUserById(long id) - удаление пользователя по идентификатору.
+    // cleanUsersTable() - очистка таблицы пользователей (удаление всех записей из таблицы).
 
     @Override
     public void createUsersTable() {
@@ -27,18 +33,13 @@ public class UserDaoHibernateImpl implements UserDao {
                 + ")";
 
         try (Session session = sessionFactory.openSession()) {
-            try {
-                Transaction transaction = session.beginTransaction();
+            Transaction transaction = session.beginTransaction();
 
-                session.createSQLQuery(createTableSQL).executeUpdate();
+            session.createSQLQuery(createTableSQL).executeUpdate();
 
-                transaction.commit();
-            } catch (Exception e) {
-                logger.log(Level.SEVERE, "Не удалось создать таблицу", e);
-                if (session.getTransaction().isActive()) {
-                    session.getTransaction().rollback();
-                }
-            }
+            transaction.commit();
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Не удалось создать таблицу", e);
         }
     }
 
@@ -47,58 +48,56 @@ public class UserDaoHibernateImpl implements UserDao {
     public void dropUsersTable() {
         String dropTableSQL = "DROP TABLE IF EXISTS USER";
         try (Session session = sessionFactory.openSession()) {
-            try {
-                Transaction transaction = session.beginTransaction();
+            Transaction transaction = session.beginTransaction();
 
-                session.createSQLQuery(dropTableSQL).executeUpdate();
+            session.createSQLQuery(dropTableSQL).executeUpdate();
 
-                transaction.commit();
-            } catch (Exception e) {
-                logger.log(Level.SEVERE, "Не удалось удалить таблицу", e);
-                if (session.getTransaction().isActive()) {
-                    session.getTransaction().rollback();
-                }
-            }
+            transaction.commit();
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Не удалось удалить таблицу", e);
         }
     }
 
 
     @Override
     public void saveUser(String name, String lastName, byte age) {
-        try (Session session = sessionFactory.openSession()) {
-            try {
-                Transaction transaction = session.beginTransaction();
-
-                User user = new User(name, lastName, age);
-                session.save(user);
-
-                transaction.commit();
-            } catch (Exception e) {
-                if (session.getTransaction().isActive()) {
-                    session.getTransaction().rollback();
-                }
-                String message = String.format("Не удалось добавить пользователя с именем %s", name);
-                logger.log(Level.SEVERE, message, e);
+        Session session = sessionFactory.openSession();
+        Transaction transaction = session.beginTransaction();
+        try {
+            User user = new User(name, lastName, age);
+            session.save(user);
+            transaction.commit();
+        } catch (Exception e) {
+            if (transaction.isActive()) {
+                transaction.rollback();
             }
+            String message = String.format("Не удалось добавить пользователя с именем %s", name);
+            logger.log(Level.SEVERE, message, e);
+        } finally {
+            session.close();
         }
     }
 
     @Override
     public void removeUserById(long id) {
-        try (Session session = sessionFactory.openSession()) {
-            try {
-                Transaction transaction = session.beginTransaction();
-
-                User user = session.get(User.class, id);
+        Session session = sessionFactory.openSession();
+        Transaction transaction = session.beginTransaction();
+        try {
+            User user = session.get(User.class, id);
+            // Проверяем, был ли найден пользователь
+            if (user != null) {
                 session.remove(user);
-
                 transaction.commit();
-            } catch (Exception e) {
-                logger.log(Level.SEVERE, String.format("Не удалось удалить пользователя с id - %d", id), e);
-                if (session.getTransaction().isActive()) {
-                    session.getTransaction().rollback();
-                }
+            } else {
+                logger.warning(String.format("Пользователь с id - %d не найден", id));
             }
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, String.format("Не удалось удалить пользователя с id - %d", id), e);
+            if (transaction.isActive()) {
+                transaction.rollback();
+            }
+        } finally {
+            session.close();
         }
     }
 
@@ -107,39 +106,28 @@ public class UserDaoHibernateImpl implements UserDao {
     public List<User> getAllUsers() {
         List<User> users = new ArrayList<>();
         try (Session session = sessionFactory.openSession()) {
-            try {
-                Transaction transaction = session.beginTransaction();
-
-                users = session.createQuery("SELECT u from User u", User.class).getResultList();
-
-                transaction.commit();
-            } catch (Exception e) {
-                logger.log(Level.SEVERE, "Не удалось получить всех пользователей", e);
-                if (session.getTransaction().isActive()) {
-                    session.getTransaction().rollback();
-                }
-            }
+            users = session.createQuery("SELECT u from User u", User.class).getResultList();
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Не удалось получить всех пользователей", e);
         }
         return users;
     }
 
 
-
     @Override
     public void cleanUsersTable() {
-        try (Session session = sessionFactory.openSession()) {
-            try {
-                Transaction transaction = session.beginTransaction();
-
-                session.createQuery("DELETE FROM User").executeUpdate();
-
-                transaction.commit();
-            } catch (Exception e) {
-                logger.log(Level.SEVERE, "Не удалось очистить таблицу", e);
-                if (session.getTransaction().isActive()) {
-                    session.getTransaction().rollback();
-                }
+        Session session = sessionFactory.openSession();
+        Transaction transaction = session.beginTransaction();
+        try {
+            session.createQuery("DELETE FROM User").executeUpdate();
+            transaction.commit();
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Не удалось очистить таблицу", e);
+            if (transaction.isActive()) {
+                transaction.rollback();
             }
+        } finally {
+            session.close();
         }
     }
 }

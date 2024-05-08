@@ -20,9 +20,8 @@ public class Util {
     private Util() {
     }
 
-    public static class MySql{
-        private MySql(){
-
+    public static class MySql {
+        private MySql() {
         }
 
         public static Connection getConnection() {
@@ -36,20 +35,8 @@ public class Util {
         }
     }
 
-//    public static void closeConnection(Connection connection) {
-//        if (connection != null) {
-//            try {
-//                connection.close();
-//                logger.info("Соединение с базой данных закрыто");
-//            } catch (SQLException e) {
-//                logger.log(Level.SEVERE, "При закрытии соединения произошла ошибка", e);
-//            }
-//        }
-//    }
-
-    public static class Hibernate{
-        private Hibernate(){
-
+    public static class Hibernate {
+        private Hibernate() {
         }
 
         private static final Configuration configuration = new Configuration()
