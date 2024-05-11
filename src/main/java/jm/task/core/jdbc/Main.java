@@ -20,7 +20,5 @@ public class Main {
         userService.cleanUsersTable();
         userService.dropUsersTable();
 
-        // Закрываем SessionFactory после завершения работы
-        Util.Hibernate.getSessionFactory().close();
     }
 }

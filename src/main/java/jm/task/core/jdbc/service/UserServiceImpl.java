@@ -11,6 +11,8 @@ import static java.util.logging.Logger.getLogger;
 import java.util.logging.Logger;
 
 public class UserServiceImpl implements UserService {
+    // поправил инкапсуляцию и сделал его private
+    // использовал интерфейс UserDao, вместо конкретной реализации UserDaoHidernateImpl
     private final UserDao dao = new UserDaoHibernateImpl();
 
     @Override
